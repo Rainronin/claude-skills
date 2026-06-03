@@ -17,6 +17,29 @@ description: >
 
 > 手动命令不管当前上下文是什么都会强制执行此 skill。建议在对话开头就输入 `/答辩` 确保 skill 已激活。`,
 
+## 前置检查：协作 Skill 探测
+
+**在开始任何工作前，先检查以下两个 skill 是否可用：**
+
+```javascript
+// 检查方法：查看 available_skills 列表中是否包含对应 skill
+// docx — 专业 Word 文档生成
+// frontend-design — 前端/视觉设计美化
+```
+
+| 协作 Skill | 用途 | 若可用 |
+|-----------|------|--------|
+| `docx` | 专业 DOCX 生成、表格格式化、样式管理 | 阶段 4 的 DOCX 生成全部委托给它，不需要手写 docx-js 脚本 |
+| `frontend-design` | 视觉设计、配色方案、排版美化 | 委托它设计封面配色、表格样式、标题层级视觉方案 |
+
+**调用方式：**
+- 若 `docx` 可用 → 在阶段 4 使用 `Skill` 工具调用 `docx`，将文档内容和结构要求传给它，由它生成最终 DOCX
+- 若 `frontend-design` 可用 → 在阶段 2 设计完成后，用它生成一份"视觉设计指南"（配色、间距、字体层级、表格边框风格），再传给 `docx` skill 执行
+- 两者都可用 → **三 skill 联合作战**：本 skill 负责内容策划 + Q&A 设计 → `frontend-design` 负责视觉方案 → `docx` 负责文档生成
+- 都不可用 → 回退到手动 docx-js 脚本模式（阶段 4 原始流程）
+
+> **重要**：不要假设 skill 一定存在。每次执行前必须检查 `available_skills` 列表。Skill 工具调用不存在的 skill 会报错。
+
 ## 工作流程（4 阶段）
 
 ### 阶段 1：收集信息
@@ -79,18 +102,36 @@ description: >
 
 ### 阶段 4：生成 DOCX
 
-使用 `docx` npm 包（`npm install -g docx`）生成 Word 文档。
+**根据前置检查结果选择策略：**
 
-**生成脚本模板** 见 `references/docx-template.js`。
+#### 策略 A：docx + frontend-design 双 skill 可用（推荐）
 
-**关键注意事项：**
+1. **先调 `frontend-design`**：将十大章节的文档大纲传给它，生成一份视觉设计指南，包括：
+   - 封面配色方案（标题色、背景色、分割线色）
+   - 标题层级字体大小与间距（H1/H2/H3 + 正文 + 代码块）
+   - 表格样式（表头底色、边框粗细、单元格 padding）
+   - 代码块风格（背景色、字体、行间距）
+   - 页眉页脚样式
+
+2. **再调 `docx`**：将视觉设计指南 + 完整文档内容 + 章节结构传给 `docx` skill，由它生成最终的 `.docx` 文件。
+
+#### 策略 B：仅 docx 可用
+
+直接调 `docx` skill，传递完整文档内容和基本格式要求，由它生成 DOCX。
+
+#### 策略 C：回退到手动脚本
+
+若两个 skill 都不可用，使用 `docx` npm 包手写生成脚本。
+模板见 `references/docx-template.md`。
+
+**关键注意事项（手动模式下）：**
 - JS 字符串中不能使用未转义的 ASCII 双引号 `"`，中文内容中的引号要用 `\"` 转义
 - 表宽必须使用 `WidthType.DXA`（不能用 PERCENTAGE，Google Docs 不兼容）
 - 代码块使用等宽字体（`Consolas`）+ 灰色背景（`F5F5F5`）模拟 IDE 效果
 - 页面设为 A4，字体用 `Microsoft YaHei`（微软雅黑）支持中文
 - 生成后检查：所有 Heading 编号正确、表格完整、无乱码
 
-**运行命令：**
+**手动运行命令：**
 ```bash
 cd <project-dir>
 NODE_PATH="$(npm root -g)" node scripts/generate-defense-docx.js
